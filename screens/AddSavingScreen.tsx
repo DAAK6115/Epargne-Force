@@ -14,6 +14,9 @@ import {
   SavingDestination,
   Transaction,
 } from "../context/TransactionsContext";
+import { useAuth } from "../auth/AuthContext";
+import { addTransaction as addRemoteTransaction } from "../src/api/firebaseApi";
+
 
 const DESTINATIONS: { key: SavingDestination; label: string }[] = [
   { key: "compte_commun", label: "Compte commun" },
@@ -31,6 +34,7 @@ export default function AddSavingScreen({
   route: any;
 }) {
   const { addTransaction, updateTransaction, transactions } = useTransactions();
+  const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [destination, setDestination] =
@@ -54,42 +58,58 @@ export default function AddSavingScreen({
     }
   }, [existingTx]);
 
-  async function handleSave() {
-    const parsed = parseInt(amount.replace(/\s/g, ""), 10);
-    if (!parsed || parsed <= 0) {
-      Alert.alert("Montant invalide", "Entre un montant valide en FCFA.");
-      return;
-    }
-    if (!label.trim()) {
-      Alert.alert(
-        "Libellé obligatoire",
-        "Décris rapidement cette épargne (ex : salaire, bonus…)."
-      );
-      return;
-    }
+async function handleSave() {
+  const parsed = parseInt(amount.replace(/\s/g, ""), 10);
+  if (!parsed || parsed <= 0) {
+    Alert.alert("Montant invalide", "Entre un montant valide en FCFA.");
+    return;
+  }
+  if (!label.trim()) {
+    Alert.alert(
+      "Libellé obligatoire",
+      "Décris rapidement cette épargne (ex : salaire, bonus…)."
+    );
+    return;
+  }
 
-    try {
-      setSubmitting(true);
-      if (editingId && existingTx) {
-        updateTransaction(editingId, {
-          amount: parsed,
-          label: label.trim(),
-          destination,
-        });
-      } else {
-        addTransaction({
+  try {
+    setSubmitting(true);
+
+    if (editingId && existingTx) {
+      // 🔹 Edition : uniquement local pour l’instant
+      updateTransaction(editingId, {
+        amount: parsed,
+        label: label.trim(),
+        destination,
+      });
+    } else {
+      // 🔹 Création locale
+      addTransaction({
+        type: "epargne",
+        amount: parsed,
+        label: label.trim(),
+        date: getTodayString(),
+        destination,
+      });
+
+      // 🔹 Création distante (Firestore) pour le partage
+      if (user) {
+        await addRemoteTransaction({
+          ownerPseudo: user.pseudo,
           type: "epargne",
           amount: parsed,
           label: label.trim(),
           date: getTodayString(),
-          destination,
         });
       }
-      navigation.goBack();
-    } finally {
-      setSubmitting(false);
     }
+
+    navigation.goBack();
+  } finally {
+    setSubmitting(false);
   }
+}
+
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>

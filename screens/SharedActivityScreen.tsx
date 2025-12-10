@@ -7,29 +7,15 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  loadTransactionsForUser,
-  Transaction,
-  SavingDestination,
-} from "../context/TransactionsContext";
+import { getPartnerTransactions } from "../src/api/firebaseApi";
 
-function getDestinationLabel(dest?: SavingDestination) {
-  if (!dest) return "";
-  switch (dest) {
-    case "compte_commun":
-      return "Compte commun";
-    case "wave":
-      return "Wave";
-    case "orange_money":
-      return "Orange Money";
-    case "mtn_money":
-      return "MTN Money";
-    case "autre":
-      return "Autre";
-    default:
-      return "";
-  }
-}
+type RemoteTransaction = {
+  id: string;
+  label: string;
+  type: "epargne" | "depense";
+  amount: number;
+  date: string;
+};
 
 export default function SharedActivityScreen({
   navigation,
@@ -38,23 +24,29 @@ export default function SharedActivityScreen({
   navigation: any;
   route: any;
 }) {
-  const { userId, userName } = route.params || {};
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const { partnerPseudo, userName } = route.params || {};
+  const [transactions, setTransactions] = useState<RemoteTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const data = await loadTransactionsForUser(userId);
-      setTransactions(data);
-      setLoading(false);
+      try {
+        const data = await getPartnerTransactions(partnerPseudo);
+        // Firestore renvoie un tableau d'objets avec id, type, amount, label, date...
+        setTransactions(data as RemoteTransaction[]);
+      } catch (e) {
+        console.log("Erreur chargement transactions partenaire", e);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [userId]);
+  }, [partnerPseudo]);
 
   const totalEpargne = useMemo(
     () =>
       transactions
         .filter((t) => t.type === "epargne")
-        .reduce((sum, t) => sum + t.amount, 0),
+        .reduce((sum, t) => sum + (t.amount || 0), 0),
     [transactions]
   );
 
@@ -62,7 +54,7 @@ export default function SharedActivityScreen({
     () =>
       transactions
         .filter((t) => t.type === "depense")
-        .reduce((sum, t) => sum + t.amount, 0),
+        .reduce((sum, t) => sum + (t.amount || 0), 0),
     [transactions]
   );
 
@@ -70,7 +62,11 @@ export default function SharedActivityScreen({
     return (
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <View style={styles.headerRow}>
+          <Text style={styles.backText} onPress={() => navigation.goBack()}>
+            ◀
+          </Text>
           <Text style={styles.title}>Activité de {userName}</Text>
+          <View style={{ width: 24 }} />
         </View>
         <ActivityIndicator />
       </SafeAreaView>
@@ -115,12 +111,9 @@ export default function SharedActivityScreen({
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View>
-              <Text style={styles.label}>{item.label}</Text>
+              <Text style={styles.label}>{item.label || "Sans libellé"}</Text>
               <Text style={styles.meta}>
                 {item.type === "epargne" ? "Épargne" : "Dépense"} · {item.date}
-                {item.type === "epargne" && item.destination
-                  ? " · " + getDestinationLabel(item.destination)
-                  : ""}
               </Text>
             </View>
             <Text

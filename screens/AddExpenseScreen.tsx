@@ -13,6 +13,9 @@ import {
   getTodayString,
   Transaction,
 } from "../context/TransactionsContext";
+import { useAuth } from "../auth/AuthContext";
+import { addTransaction as addRemoteTransaction } from "../src/api/firebaseApi";
+
 
 export default function AddExpenseScreen({
   navigation,
@@ -22,6 +25,7 @@ export default function AddExpenseScreen({
   route: any;
 }) {
   const { addTransaction, updateTransaction, transactions } = useTransactions();
+  const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,37 +44,56 @@ export default function AddExpenseScreen({
     }
   }, [existingTx]);
 
-  async function handleSave() {
-    const parsed = parseInt(amount.replace(/\s/g, ""), 10);
-    if (!parsed || parsed <= 0) {
-      Alert.alert("Montant invalide", "Entre un montant valide en FCFA.");
-      return;
-    }
-    if (!label.trim()) {
-      Alert.alert("Libellé obligatoire", "Décris rapidement la dépense.");
-      return;
-    }
+async function handleSave() {
+  const parsed = parseInt(amount.replace(/\s/g, ""), 10);
+  if (!parsed || parsed <= 0) {
+    Alert.alert("Montant invalide", "Entre un montant valide en FCFA.");
+    return;
+  }
+  if (!label.trim()) {
+    Alert.alert(
+      "Libellé obligatoire",
+      "Décris rapidement la dépense."
+    );
+    return;
+  }
 
-    try {
-      setSubmitting(true);
-      if (editingId && existingTx) {
-        updateTransaction(editingId, {
-          amount: parsed,
-          label: label.trim(),
-        });
-      } else {
-        addTransaction({
+  try {
+    setSubmitting(true);
+
+    if (editingId && existingTx) {
+      // 🔹 Edition : uniquement local pour l’instant
+      updateTransaction(editingId, {
+        amount: parsed,
+        label: label.trim(),
+      });
+    } else {
+      // 🔹 Création locale
+      addTransaction({
+        type: "depense",
+        amount: parsed,
+        label: label.trim(),
+        date: getTodayString(),
+      });
+
+      // 🔹 Création distante (Firestore) pour le partage
+      if (user) {
+        await addRemoteTransaction({
+          ownerPseudo: user.pseudo,
           type: "depense",
           amount: parsed,
           label: label.trim(),
           date: getTodayString(),
         });
       }
-      navigation.goBack();
-    } finally {
-      setSubmitting(false);
     }
+
+    navigation.goBack();
+  } finally {
+    setSubmitting(false);
   }
+}
+
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>

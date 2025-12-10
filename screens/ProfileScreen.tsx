@@ -101,12 +101,12 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
               key={u.id}
               style={styles.sharedRow}
               onPress={() =>
-                navigation.navigate("SharedActivity", {
-                  userId: u.id,
-                  userName: u.pseudo || u.name,
-                })
-              }
-            >
+  navigation.navigate("SharedActivity", {
+    partnerPseudo: u.pseudo,
+    userName: u.name || u.pseudo,
+  })
+}
+           >
               <Text style={styles.sharedName}>
                 {u.name} ({u.pseudo})
               </Text>
